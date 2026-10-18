@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MongoDB Chatbot</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1c2330; --muted: #6a7384; --border: #e2e6ec;
+    --accent: #13805b; --accent-text: #ffffff; --user: #e8f3ee; --code-bg: #f1f3f6;
+    --bad: #b3261e; --bad-bg: #fdecea; --warn: #8a5a00; --warn-bg: #fff4dc; --ok: #13805b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151a; --panel: #1b2027; --text: #e6e9ee; --muted: #8f99a8; --border: #2c333d;
+      --accent: #3dbb8c; --accent-text: #0b1a14; --user: #1d3329; --code-bg: #12161c;
+      --bad: #ff8a80; --bad-bg: #3a1f1d; --warn: #f2c26b; --warn-bg: #3a2f17; --ok: #3dbb8c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; }
+  header { background: var(--panel); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
+  main { flex: 1; overflow-y: auto; padding: 20px 16px; }
+  .wrap { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .msg { max-width: 100%; }
+  .msg.user { align-self: flex-end; background: var(--user); padding: 10px 14px; border-radius: 14px 14px 4px 14px; max-width: 85%; white-space: pre-wrap; }
+  .msg.bot { background: var(--panel); border: 1px solid var(--border); border-radius: 14px 14px 14px 4px; padding: 14px 16px; }
+  .msg.err { background: var(--bad-bg); color: var(--bad); border: 1px solid var(--bad); border-radius: 12px; padding: 12px 14px; }
+  .answer { white-space: pre-wrap; word-wrap: break-word; }
+  .meta { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+  details { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 13px; user-select: none; }
+  h4 { margin: 12px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: 0; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .row { display: flex; align-items: center; justify-content: space-between; }
+  button.small { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; padding: 2px 8px; cursor: pointer; }
+  button.small:hover { color: var(--text); }
+  .trace { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  .trace li { padding: 5px 9px; border-radius: 6px; background: var(--code-bg); }
+  .trace li.bad { background: var(--bad-bg); color: var(--bad); }
+  .trace li.warn { background: var(--warn-bg); color: var(--warn); }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; max-height: 340px; overflow-y: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  th { position: sticky; top: 0; background: var(--code-bg); font-weight: 600; }
+  .welcome { text-align: center; color: var(--muted); padding: 30px 10px 6px; }
+  .welcome h2 { color: var(--text); margin: 0 0 6px; font-size: 20px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+  .chip { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 6px 13px; font-size: 13px; cursor: pointer; }
+  .chip:hover { border-color: var(--accent); }
+  .thinking { color: var(--muted); display: flex; align-items: center; gap: 10px; }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  form { background: var(--panel); border-top: 1px solid var(--border); padding: 12px 16px; }
+  .inputrow { max-width: 860px; margin: 0 auto; display: flex; gap: 10px; }
+  textarea { flex: 1; resize: none; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font: inherit; max-height: 140px; }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button.send { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 10px; padding: 0 20px; font-weight: 600; cursor: pointer; }
+  button.send:disabled { opacity: .5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MongoDB Chatbot</h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
+</header>
+
+<main id="main"><div class="wrap" id="chat">
+  <div class="welcome" id="welcome">
+    <h2>Ask your database a question</h2>
+    <div>Plain English in, MongoDB query + answer out.</div>
+    <div class="chips" id="chips"></div>
+  </div>
+</div></main>
+
+<form id="form">
+  <div class="inputrow">
+    <textarea id="input" rows="1" maxlength="500" placeholder="Ask a question about your data…  (Enter to send, Shift+Enter for a new line)"></textarea>
+    <button class="send" id="send" type="submit">Send</button>
+  </div>
+</form>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const chat = $("chat"), input = $("input"), sendBtn = $("send");
+
+const EXAMPLES = [
+  "How many restaurants are in the database?",
+  "How many restaurants are in each borough?",
+  "What are the 10 most common cuisines?",
+  "List 5 Italian restaurants in Manhattan",
+  "What is the average inspection score by cuisine?",
+];
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;   // textContent => no HTML injection
+  return e;
+}
+function scrollDown() { const m = $("main"); m.scrollTop = m.scrollHeight; }
+
+// ---- header status
+fetch("/api/info").then(r => r.json()).then(i => {
+  if (i.ok) {
+    $("dot").className = "dot ok";
+    $("statusText").textContent = i.mode === "catalog"
+      ? `${i.database} · ${i.collections} collections indexed`
+      : `${i.database}.${i.collection} · ~${i.documents.toLocaleString()} docs`;
+  } else {
+    $("dot").className = "dot bad";
+    $("statusText").textContent = "Database not reachable: " + i.error;
+  }
+}).catch(() => { $("dot").className = "dot bad"; $("statusText").textContent = "Server not reachable"; });
+
+// ---- example chips
+EXAMPLES.forEach(q => {
+  const c = el("button", "chip", q); c.type = "button";
+  c.onclick = () => { input.value = q; form.requestSubmit(); };
+  $("chips").appendChild(c);
+});
+
+// ---- rendering
+function renderTable(rows) {
+  if (!rows.length) return null;
+  const cols = [];
+  rows.forEach(r => Object.keys(r).forEach(k => { if (!cols.includes(k)) cols.push(k); }));
+  const shown = cols.slice(0, 10);
+  const wrap = el("div", "tablewrap"), t = el("table"), thead = el("thead"), hr = el("tr");
+  shown.forEach(c => hr.appendChild(el("th", "", c)));
+  thead.appendChild(hr); t.appendChild(thead);
+  const tb = el("tbody");
+  rows.forEach(r => {
+    const tr = el("tr");
+    shown.forEach(c => {
+      let v = r[c];
+      if (v === undefined || v === null) v = "";
+      else if (typeof v === "object") v = JSON.stringify(v);
+      const td = el("td", "", String(v)); td.title = String(v);
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); wrap.appendChild(t);
+  if (cols.length > shown.length) wrap.appendChild(el("div", "meta", `+ ${cols.length - shown.length} more columns not shown`));
+  return wrap;
+}
+
+function renderTrace(trace) {
+  const ul = el("ul", "trace");
+  trace.forEach(t => {
+    let text, cls = "";
+    if (t.step === "keywords") text = "Keywords: " + (t.keywords || []).join(", ");
+    else if (t.step === "retrieve") text = "Top candidates: " + (t.candidates || []).map(c => `${c.name} (${c.score})`).join(", ");
+    else if (t.step === "choose") text = `Chose collection "${t.collection}". ${t.reason || ""}`;
+    else if (t.step === "use_default") text = `Using collection "${t.collection}"`;
+    else if (t.step === "generate") text = `Attempt ${t.attempt}: generated pipeline. ${t.reasoning || ""}`;
+    else if (t.step === "validate") { text = t.ok ? "Validation passed" : "Validation failed: " + t.message; if (!t.ok) cls = "bad"; }
+    else if (t.step === "execute") {
+      if (t.ok) text = `Executed on Atlas: ${t.count} document(s) returned`;
+      else { text = t.message; cls = t.message.startsWith("No documents") ? "warn" : "bad"; }
+    } else text = JSON.stringify(t);
+    ul.appendChild(el("li", cls, text));
+  });
+  return ul;
+}
+
+function addBot(data) {
+  const box = el("div", "msg bot");
+  box.appendChild(el("div", "answer", data.answer));
+  const bits = [`${data.attempts} attempt${data.attempts === 1 ? "" : "s"}`];
+  if (data.collection) bits.unshift(data.collection);
+  if (data.success) bits.push(`${data.total_docs} document${data.total_docs === 1 ? "" : "s"}`);
+  bits.push(`${data.seconds}s`);
+  box.appendChild(el("div", "meta", bits.join(" · ")));
+
+  const d = el("details");
+  d.appendChild(el("summary", "", "How this was answered"));
+  if (data.pipeline) {
+    const row = el("div", "row"); row.appendChild(el("h4", "", "MongoDB pipeline"));
+    const copy = el("button", "small", "Copy"); copy.type = "button";
+    const text = JSON.stringify(data.pipeline, null, 2);
+    copy.onclick = () => navigator.clipboard.writeText(text).then(() => { copy.textContent = "Copied"; setTimeout(() => copy.textContent = "Copy", 1200); });
+    row.appendChild(copy); d.appendChild(row);
+    d.appendChild(el("pre", "", text));
+  }
+  if (data.trace && data.trace.length) { d.appendChild(el("h4", "", "Steps")); d.appendChild(renderTrace(data.trace)); }
+  const table = renderTable(data.results || []);
+  if (table) {
+    d.appendChild(el("h4", "", data.total_docs > data.results.length ? `Results (first ${data.results.length})` : "Results"));
+    d.appendChild(table);
+  }
+  box.appendChild(d);
+  chat.appendChild(box);
+}
+
+// ---- submit
+const form = $("form");
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = input.value.trim();
+  if (!q || sendBtn.disabled) return;
+  $("welcome")?.remove();
+  chat.appendChild(el("div", "msg user", q));
+  input.value = ""; input.style.height = "auto";
+  sendBtn.disabled = true;
+
+  const thinking = el("div", "msg bot thinking");
+  thinking.appendChild(el("span", "spinner")); thinking.appendChild(el("span", "", "Writing and testing a query…"));
+  chat.appendChild(thinking); scrollDown();
+
+  try {
+    const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }) });
+    const data = await res.json();
+    thinking.remove();
+    if (!res.ok) chat.appendChild(el("div", "msg err", "Something went wrong: " + (data.detail || res.statusText) + "\nThis is often temporary (API busy or rate-limited). Try again in a minute."));
+    else addBot(data);
+  } catch (err) {
+    thinking.remove();
+    chat.appendChild(el("div", "msg err", "Could not reach the server: " + err.message));
+  }
+  sendBtn.disabled = false; input.focus(); scrollDown();
+});
+
+input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; });
+input.focus();
+</script>
+</body>
+</html>

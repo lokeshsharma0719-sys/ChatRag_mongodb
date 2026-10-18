@@ -1,0 +1,26 @@
+# Copy to .env and fill in.
+# Atlas -> your cluster -> Connect -> Drivers -> copy the connection string.
+# Use a READ-ONLY database user (Atlas -> Database Access -> built-in role "read" on this database).
+MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+DB_NAME=your_database
+# Only needed for single-collection mode (when there is no catalog.json):
+COLLECTION_NAME=your_collection
+
+# Get a key at https://aistudio.google.com/apikey
+GOOGLE_API_KEY=your-gemini-key
+LLM_MODEL=gemini-3.6-flash
+
+MAX_ATTEMPTS=3
+
+# If the primary model is overloaded (503), these are tried in order. Comma-separated.
+LLM_FALLBACK_MODELS=gemini-3.5-flash,gemini-2.5-flash
+
+# Schema source: "auto" = detect fields by sampling the live collection (no schema.json needed),
+# "file" = use schema.json. If unset: file when schema.json exists, otherwise auto.
+SCHEMA_SOURCE=auto
+SCHEMA_SAMPLE_SIZE=500
+
+# Multi-collection routing (see build_catalog.py)
+EMBEDDING_MODEL=gemini-embedding-001
+EMBEDDING_DIMS=768
+ROUTER_TOP_K=5
